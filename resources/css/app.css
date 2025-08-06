@@ -195,6 +195,7 @@ h1 {
   gap: 10px;
   width: 300px;
   max-width: 90%;
+  position: relative;
 }
 
 .modal input, .modal select, .modal textarea {

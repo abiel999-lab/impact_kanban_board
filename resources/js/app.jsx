@@ -45,42 +45,73 @@ function App() {
     const { source, destination } = result;
     if (!destination) return;
 
-    const sourceTasks = Array.from(columns[source.droppableId]);
-    const [moved] = sourceTasks.splice(source.index, 1);
+    // Jika posisi sama, tidak perlu update
+    if (
+      source.droppableId === destination.droppableId &&
+      source.index === destination.index
+    ) {
+      return;
+    }
 
-    const destTasks = Array.from(columns[destination.droppableId]);
-    destTasks.splice(destination.index, 0, moved);
+    setColumns((prevColumns) => {
+      const newColumns = { ...prevColumns };
 
-    setColumns({
-      ...columns,
-      [source.droppableId]: sourceTasks,
-      [destination.droppableId]: destTasks,
+      // Ambil task dari source
+      const sourceTasks = Array.from(newColumns[source.droppableId]);
+      const [movedTask] = sourceTasks.splice(source.index, 1);
+
+      // Ambil list task tujuan
+      const destTasks =
+        source.droppableId === destination.droppableId
+          ? sourceTasks
+          : Array.from(newColumns[destination.droppableId]);
+
+      // Masukkan task ke posisi baru
+      destTasks.splice(destination.index, 0, movedTask);
+
+      // Update state kolom
+      newColumns[source.droppableId] =
+        source.droppableId === destination.droppableId
+          ? destTasks
+          : sourceTasks;
+      newColumns[destination.droppableId] = destTasks;
+
+      return newColumns;
     });
   };
 
   const handleAddTask = () => {
     if (!newTask.title.trim()) return;
-    const id = editTask ? editTask.id : Date.now().toString();
+
+    // Pastikan ID selalu unik
+    const id = editTask ? editTask.id : crypto.randomUUID();
     const task = { id, ...newTask };
 
-    const updated = { ...columns };
-    // Jika edit
-    if (editTask) {
-      for (let col in updated) {
-        updated[col] = updated[col].filter((t) => t.id !== id);
-      }
-    }
-    updated[newTask.column] = [...updated[newTask.column], task];
+    setColumns((prev) => {
+      const updated = { ...prev };
 
-    setColumns(updated);
+      // Jika edit, hapus task lama dari semua kolom
+      if (editTask) {
+        for (let col in updated) {
+          updated[col] = updated[col].filter((t) => t.id !== id);
+        }
+      }
+
+      updated[newTask.column] = [...updated[newTask.column], task];
+
+      return updated;
+    });
+
     setShowModal(false);
     setEditTask(null);
     setNewTask({ title: "", urgency: "Low", description: "", column: "todo" });
   };
 
   const handleDeleteTask = (colId, taskId) => {
-    const updated = columns[colId].filter((t) => t.id !== taskId);
-    setColumns({ ...columns, [colId]: updated });
+    setColumns((prev) => ({
+      ...prev,
+      [colId]: prev[colId].filter((t) => t.id !== taskId),
+    }));
   };
 
   const handleEditTask = (colId, task) => {
@@ -108,9 +139,7 @@ function App() {
           localStorage.setItem("kanbanBg", newBg);
 
           // Reset dropdown supaya bisa pilih Custom lagi nanti
-          setTimeout(() => {
-            document.querySelector("select").value = "custom";
-          }, 0);
+          document.querySelector("select").value = "#f4f4f4";
         };
         reader.readAsDataURL(file);
 
@@ -123,15 +152,14 @@ function App() {
     }
   };
 
-
-
   return (
     <div
       className="app"
       style={{
         background: bg.startsWith("url") ? undefined : bg,
         backgroundImage: bg.startsWith("url") ? bg : undefined,
-        backgroundSize: "cover",
+        backgroundSize: bg.startsWith("url") ? "100% 100%" : undefined,
+        backgroundRepeat: "no-repeat",
         backgroundPosition: "center",
         minHeight: "100vh",
       }}
@@ -140,17 +168,16 @@ function App() {
         style={{
           fontSize: "2rem",
           marginBottom: "10px",
-          background: "rgba(255, 255, 255, 0.7)", // putih transparan
+          background: "rgba(255, 255, 255, 0.7)",
           padding: "10px 20px",
-          borderRadius: "12px", // rounded rectangle
+          borderRadius: "12px",
           boxShadow: "0 2px 10px rgba(0,0,0,0.15)",
           display: "inline-block",
-          backdropFilter: "blur(4px)", // efek glassy<input
+          backdropFilter: "blur(4px)",
         }}
       >
         Impact Kanban Board
       </h1>
-
 
       {/* Toolbar */}
       <div className="add-task">
@@ -229,8 +256,24 @@ function App() {
 
       {/* Modal Tambah/Edit Task */}
       {showModal && (
-        <div className="modal-backdrop" onClick={() => setShowModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-backdrop">
+            <div className="modal">
+              <button
+                className="close-modal"
+                onClick={() => setShowModal(false)}
+                style={{
+                  position: "absolute",
+                  top: "8px",
+                  right: "10px",
+                  background: "none",
+                  border: "none",
+                  fontSize: "1.5rem",
+                  cursor: "pointer",
+                  color: "#333",
+                }}
+              >
+                ×
+              </button>
             <h3>{editTask ? "Edit Task" : "Tambah Task Baru"}</h3>
             <input
               placeholder="Nama Task"
@@ -246,7 +289,9 @@ function App() {
             />
             <select
               value={newTask.urgency}
-              onChange={(e) => setNewTask({ ...newTask, urgency: e.target.value })}
+              onChange={(e) =>
+                setNewTask({ ...newTask, urgency: e.target.value })
+              }
             >
               <option>Low</option>
               <option>Medium</option>
